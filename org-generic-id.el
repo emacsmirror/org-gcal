@@ -531,7 +531,8 @@ FILE-TO-BUF has a format like ‘org-generic-id--files’."
 
 
 (unless (featurep 'org-generic-id)
-  (unless org-generic-id-locations
+  (unless (and (hash-table-p org-generic-id-locations)
+               (> (hash-table-count org-generic-id-locations) 0))
     (message "Loading org-generic-id-locations on first load.")
     (org-generic-id-locations-load)))
 

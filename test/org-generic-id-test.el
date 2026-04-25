@@ -4,6 +4,20 @@
 (require 'cl-lib)
 (require 'el-mock)
 
+(defconst org-generic-id-test--source-file
+  (expand-file-name "../org-generic-id.el"
+                    (file-name-directory (or load-file-name buffer-file-name)))
+  "Path to the org-generic-id source file.")
+
+(defun org-generic-id-test--load-source-as-first-load ()
+  "Load org-generic-id as if it has not already provided its feature."
+  (let ((old-features features))
+    (unwind-protect
+        (progn
+          (setq features (remove 'org-generic-id features))
+          (load-file org-generic-id-test--source-file))
+      (setq features old-features))))
+
 (ert-deftest org-generic-id--round-trip ()
   "Verify that ‘org-generic-id-locations-save’ and
 ‘org-generic-id-locations-load' round-trip."
@@ -20,6 +34,44 @@
            org-generic-id-locations-alist)))
     (org-generic-id-locations-save)
     (org-generic-id-locations-load)
+    (should (equal (org-generic-id--locations-hash-to-alist
+                    org-generic-id-locations)
+                   org-generic-id-locations-alist))))
+
+(ert-deftest org-generic-id--first-load-loads-empty-location-cache ()
+  "Verify first load reads persisted locations when memory cache is empty."
+  (let* ((org-generic-id-locations-file
+          (make-temp-file "org-generic-id-locations."))
+         (org-generic-id-locations-alist
+          '(("entry-id"
+             ("/tmp/calendar.org" "event-1/calendar@example.com"))))
+         (org-generic-id-locations (org-generic-id--make-hash-table)))
+    (with-temp-file org-generic-id-locations-file
+      (let ((print-level nil)
+            (print-length nil))
+        (pp org-generic-id-locations-alist (current-buffer))))
+    (org-generic-id-test--load-source-as-first-load)
+    (should (equal (org-generic-id--locations-hash-to-alist
+                    org-generic-id-locations)
+                   org-generic-id-locations-alist))))
+
+(ert-deftest org-generic-id--first-load-keeps-populated-location-cache ()
+  "Verify first load preserves an already-populated memory cache."
+  (let* ((org-generic-id-locations-file
+          (make-temp-file "org-generic-id-locations."))
+         (org-generic-id-locations-alist
+          '(("entry-id"
+             ("/tmp/memory.org" "event-1/calendar@example.com"))))
+         (org-generic-id-locations
+          (org-generic-id--locations-alist-to-hash
+           org-generic-id-locations-alist)))
+    (with-temp-file org-generic-id-locations-file
+      (let ((print-level nil)
+            (print-length nil))
+        (pp '(("entry-id"
+               ("/tmp/disk.org" "event-2/calendar@example.com")))
+            (current-buffer))))
+    (org-generic-id-test--load-source-as-first-load)
     (should (equal (org-generic-id--locations-hash-to-alist
                     org-generic-id-locations)
                    org-generic-id-locations-alist))))
